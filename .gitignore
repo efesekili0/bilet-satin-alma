@@ -1,0 +1,29 @@
+# Vendor
+vendor/
+
+# Database - SADECE GEÇİCİ DOSYALARI ENGELLE
+data/*.log
+data/*.tmp
+data/cache/
+data/temp/
+# Ama asıl veritabanı dosyasını ENGELLEME
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment
+.env
+
+# Backup
+*.backup
+backup*.sql

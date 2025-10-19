@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vatanbilet_web
+    ports:
+      - "8080:80"
+    volumes:
+      # Named volume kullan (SELinux sorunlarını çözer)
+      - vatanbilet_data:/var/www/html/data
+      # Geliştirme için kaynak kodu mount et (isteğe bağlı - yorum satırını kaldırarak aktif edebilirsiniz)
+      # - ./public:/var/www/html/public
+    environment:
+      - PHP_DISPLAY_ERRORS=On
+      - PHP_ERROR_REPORTING=E_ALL
+    restart: unless-stopped
+    networks:
+      - vatanbilet_network
+
+networks:
+  vatanbilet_network:
+    driver: bridge
+
+volumes:
+  vatanbilet_data:
+    driver: local

@@ -1,0 +1,29 @@
+# PHP Output buffering
+<IfModule mod_php.c>
+    php_flag output_buffering On
+    php_value output_buffering 4096
+    php_flag display_errors On
+    php_value error_reporting E_ALL
+</IfModule>
+
+# Veritabanı dosyalarına erişimi engelle
+<FilesMatch "\.(db|sqlite|sqlite3)$">
+    Require all denied
+</FilesMatch>
+
+# Hassas klasörlere erişimi engelle
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^includes/ - [F,L]
+    RewriteRule ^data/ - [F,L]
+    RewriteRule ^vendor/ - [F,L]
+</IfModule>
+
+Options -Indexes
+
+# Güvenlik başlıkları
+<IfModule mod_headers.c>
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-Content-Type-Options "nosniff"
+</IfModule>
