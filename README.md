@@ -94,4 +94,4 @@ docker-compose down -v
 
 ## 📄 Lisans
 
-Bu proje eğitim ve portfolyo amaçlı geliştirilmiştir.
+Bu proje eğitim amaçlı geliştirilmiştir.
