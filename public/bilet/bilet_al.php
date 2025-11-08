@@ -85,42 +85,50 @@ try {
 
 $total_price = intval($trip['price']) * count($selected_seats);
 $discount = 0;
-$coupon_code = '';
+$coupon_code = trim($_POST['coupon_code'] ?? '');
 $coupon_id = null;
 $final_price = $total_price;
+$coupon = null;
+
+if (!empty($coupon_code) && preg_match('/^[A-Z0-9\-]{3,20}$/i', $coupon_code)) {
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM Coupons WHERE code=? AND (company_id IS NULL OR company_id=?) AND DATE(expire_date) >= DATE('now') AND usage_limit>0");
+        $stmt->execute([$coupon_code, $trip['company_id']]);
+        $coupon = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($coupon) {
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM User_Coupons WHERE user_id=? AND coupon_id=?");
+            $stmt->execute([$user_id, $coupon['id']]);
+            
+            if ($stmt->fetchColumn() == 0) {
+                $discount = floatval($coupon['discount']);
+                $coupon_id = $coupon['id'];
+                $final_price = intval($total_price * (1 - $discount / 100));
+            } else {
+                $error = 'Bu kuponu daha önce kullandınız.';
+                $coupon = null;
+                $coupon_code = '';
+            }
+        } else {
+            $error = 'Geçersiz kupon kodu veya kullanım süresi dolmuş.';
+        }
+    } catch(Exception $e) {
+        $error = 'Bir hata oluştu.';
+    }
+}
 
 if (isset($_POST['apply_coupon'])) {
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) $error = 'Güvenlik hatası.';
-    else {
-        $coupon_code = trim($_POST['coupon_code'] ?? '');
-        if (!empty($coupon_code) && preg_match('/^[A-Z0-9\-]{3,20}$/i', $coupon_code)) {
-            try {
-                $stmt = $pdo->prepare("SELECT * FROM Coupons WHERE code=? AND (company_id IS NULL OR company_id=?) AND DATE(expire_date) >= DATE('now') AND usage_limit>0");
-                $stmt->execute([$coupon_code, $trip['company_id']]);
-                $coupon = $stmt->fetch(PDO::FETCH_ASSOC);
-                if ($coupon) {
-                    $stmt = $pdo->prepare("SELECT COUNT(*) FROM User_Coupons WHERE user_id=? AND coupon_id=?");
-                    $stmt->execute([$user_id, $coupon['id']]);
-                    if ($stmt->fetchColumn() == 0) {
-                        $discount = floatval($coupon['discount']);
-                        $coupon_id = $coupon['id'];
-                        $final_price = intval($total_price * (1 - $discount / 100));
-                        $success = 'Kupon uygulandı! %'.number_format($discount,0).' indirim.';
-                    } else $error='Bu kuponu daha önce kullandınız.';
-                } else $error='Geçersiz kupon kodu veya kullanım süresi dolmuş.';
-            } catch(Exception $e) { $error='Bir hata oluştu.'; }
-        } else $error='Geçersiz kupon formatı.';
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        $error = 'Güvenlik hatası.';
+    } elseif ($coupon) {
+        $success = 'Kupon uygulandı! %'.number_format($discount,0).' indirim.';
     }
 }
 
 if (isset($_POST['complete_payment'])) {
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) $error='Güvenlik hatası.';
-    else {
-        $final_price = $total_price;
-        if (!empty($coupon_code) && $coupon_id) {
-            $final_price = intval($total_price * (1 - $discount / 100));
-        }
-
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        $error='Güvenlik hatası.';
+    } else {
         try {
             $pdo->beginTransaction();
             $stmt = $pdo->prepare("SELECT balance FROM User WHERE id=?");
@@ -134,17 +142,12 @@ if (isset($_POST['complete_payment'])) {
             $occupied = $stmt->fetchAll(PDO::FETCH_COLUMN);
             if (!empty($occupied)) throw new Exception('Seçtiğiniz koltuklar artık dolu: '.implode(', ', $occupied));
 
-            if (!empty($coupon_code)) {
-                $stmt = $pdo->prepare("SELECT * FROM Coupons WHERE code=? AND (company_id IS NULL OR company_id=?) AND usage_limit>0");
-                $stmt->execute([$coupon_code, $trip['company_id']]);
-                $coupon = $stmt->fetch(PDO::FETCH_ASSOC);
-                if ($coupon) {
-                    $stmt = $pdo->prepare("UPDATE Coupons SET usage_limit=usage_limit-1 WHERE id=? AND usage_limit>0");
-                    $stmt->execute([$coupon['id']]);
-                    $user_coupon_id = bin2hex(random_bytes(16));
-                    $stmt = $pdo->prepare("INSERT INTO User_Coupons (id, coupon_id, user_id, created_at) VALUES (?,?,?,DATETIME('now'))");
-                    $stmt->execute([$user_coupon_id, $coupon['id'], $user_id]);
-                }
+            if ($coupon && $coupon_id) {
+                $stmt = $pdo->prepare("UPDATE Coupons SET usage_limit=usage_limit-1 WHERE id=? AND usage_limit>0");
+                $stmt->execute([$coupon_id]);
+                $user_coupon_id = bin2hex(random_bytes(16));
+                $stmt = $pdo->prepare("INSERT INTO User_Coupons (id, coupon_id, user_id, created_at) VALUES (?,?,?,DATETIME('now'))");
+                $stmt->execute([$user_coupon_id, $coupon_id, $user_id]);
             }
 
             $ticket_id = bin2hex(random_bytes(16));
